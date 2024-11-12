@@ -174,6 +174,26 @@ Options:
 - For testing/gradual migration
 - No write impact
 
+## Debezium Mode (`-dbz, --debezium-mode`)
+
+- `no-wait` (default): Fast switchover with minimal CDC delay
+  - Gives 5 seconds for CDC catchup
+  - Creates new publication slot quickly
+  - Small risk of duplicate events
+  - Recommended when:
+    - Quick switchover is priority
+    - Application can handle duplicate events
+    - Replication lag is typically low
+
+- `catchup`: Safe switchover with CDC consistency
+  - Uses replication slot monitoring
+  - Waits until replication lag below threshold
+  - Ensures no event loss
+  - Recommended when:
+    - Data consistency is critical
+    - Duplicate events must be avoided
+    - Longer switchover time is acceptable
+
 ## Monitoring
 
 ### CDC Output
