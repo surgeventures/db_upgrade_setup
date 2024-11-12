@@ -1,0 +1,44 @@
+# switchover-config.yaml
+source:
+  internal_name: postgres_source
+  host: localhost
+  port: 5433
+  replicas:
+    - name: postgres_source_ro_1
+    - name: postgres_source_ro_2
+target:
+  internal_name: postgres_target
+  host: localhost
+  port: 5434
+  replicas:
+    - name: postgres_target_ro_1
+    - name: postgres_target_ro_2
+database:
+  name: testdb
+  user: testuser
+  password: testpass
+connectors:
+  - name: postgres-connector
+    slot_name: debezium
+    publication_name: dbz_publication
+pgbouncer:
+  config_file: pgbouncer.ini
+  admin_port: 6433
+  admin_user: testuser # PgBouncer admin user
+  admin_password: testpass # PgBouncer admin password
+  admin_database: pgbouncer # PgBouncer admin database name
+  pools:
+    read_write:
+      name: testdb_rw
+    read_only:
+      name: testdb_ro
+kafka:
+  connect_clusters:
+    - name: cdc
+      url: http://localhost:8083
+    - name: outbox
+      url: http://localhost:8084
+replication:
+  max_lag_bytes: 20000 # Maximum acceptable lag in bytes
+  catchup_timeout: 60 # Maximum time to wait for catchup in seconds
+  sync_sequences_gap: 100000 # Gap to maintain between sequences after switch

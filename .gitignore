@@ -1,0 +1,62 @@
+# Logs and output
+cdc_output/*
+!cdc_output/.gitkeep
+
+# Environment files
+.env
+*.env
+.env.*
+
+# Config files with secrets
+configs/userlist.txt
+configs/*local*.yaml
+configs/*local*.ini
+
+# Docker
+docker/*local*
+.docker
+
+# Dependencies
+elixir_app/_build/
+elixir_app/deps/
+elixir_app/.elixir_ls/
+elixir_app/cover/
+elixir_app/doc/
+
+# Erlang
+*.beam
+*.plt
+erl_crash.dump
+
+# Generated files
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.so
+*.dylib
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.log
+*.tmp
+*.temp
+*.pid
+
+# Keep directories
+!.gitkeep
