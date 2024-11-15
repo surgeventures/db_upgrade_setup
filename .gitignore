@@ -7,11 +7,6 @@ cdc_output/*
 *.env
 .env.*
 
-# Config files with secrets
-configs/userlist.txt
-configs/*local*.yaml
-configs/*local*.ini
-
 # Docker
 docker/*local*
 .docker
