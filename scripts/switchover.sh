@@ -9,6 +9,7 @@ CONFIG_FILE="${SCRIPT_DIR}/../configs/switchover-config.yaml"
 
 REPLICATION_INFO=()
 SWITCHOVER_MODE="readonly"
+DBZ_HANDLING="no-wait" 
 
 # Load all modules
 source "${SCRIPT_DIR}/../lib/logging.sh"
