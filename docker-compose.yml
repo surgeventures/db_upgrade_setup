@@ -159,6 +159,7 @@ services:
     image: edoburu/pgbouncer:v1.23.1-p2
     volumes:
       - ./configs/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini
+      - ./configs/pgbouncer_new.ini:/etc/pgbouncer/pgbouncer_new.ini
       - ./configs/userlist.txt:/etc/pgbouncer/userlist.txt
     command: ["/usr/bin/pgbouncer", "/etc/pgbouncer/pgbouncer.ini"]
     ports:

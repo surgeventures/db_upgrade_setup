@@ -36,6 +36,44 @@ pause_pool() {
     return 1
 }
 
+resume_pgbouncer() {
+    log_warn "Resuming PgBouncer..."
+
+    paused_dbs=$(PGPASSWORD=${PGBOUNCER_ADMIN_PASSWORD} psql -h localhost \
+        -p ${PGBOUNCER_PORT} \
+        -U ${PGBOUNCER_ADMIN_USER} \
+        -d ${PGBOUNCER_ADMIN_DB} \
+        -c "SHOW DATABASES" | awk -F'|' '
+        NR==1 {
+            for (i=1; i<=NF; i++) { 
+                gsub(" ", "", $i)
+                if ($i == "paused") paused_col = i
+                if ($i == "name") name_col = i
+            }
+        }
+        NR>2 {
+            val = $paused_col
+            gsub(" ", "", val)
+            if (val == "1") {
+                gsub(" ", "", $name_col)
+                print $name_col
+            }
+        }')
+
+    if [ -n "$paused_dbs" ]; then
+        for db in $paused_dbs; do
+            echo "Resuming database: $db"
+            PGPASSWORD=${PGBOUNCER_ADMIN_PASSWORD} psql -h localhost \
+                -p ${PGBOUNCER_PORT} \
+                -U ${PGBOUNCER_ADMIN_USER} \
+                -d ${PGBOUNCER_ADMIN_DB} \
+                -c "RESUME $db"
+        done
+    else
+        echo "No paused databases found"
+    fi
+}
+
 resume_pool() {
     local pool_name=$1
     log_warn "Resuming PgBouncer pool ${pool_name}..."
@@ -53,17 +91,18 @@ update_pgbouncer_pool() {
     log_warn "Updating PgBouncer pool ${pool_name} to point to ${new_host}..."
     pause_pool "$pool_name"
     
-    awk -v pool="$pool_name" -v host="$new_host" '
-        $1 == pool {sub(/host=[^ ]*/, "host=" host)} 1
-    ' "$PGBOUNCER_CONFIG" > "$PGBOUNCER_CONFIG.new" && \
-    mv "$PGBOUNCER_CONFIG.new" "$PGBOUNCER_CONFIG"
-    
+    PGPASSWORD=${PGBOUNCER_ADMIN_PASSWORD} psql -h localhost \
+        -p ${PGBOUNCER_PORT} \
+        -U ${PGBOUNCER_ADMIN_USER} \
+        -d ${PGBOUNCER_ADMIN_DB} \
+        -c "SET  conffile = '/etc/pgbouncer/$PGBOUNCER_SWITCHOVER_CONFIG';"
+
     PGPASSWORD=${PGBOUNCER_ADMIN_PASSWORD} psql -h localhost \
         -p ${PGBOUNCER_PORT} \
         -U ${PGBOUNCER_ADMIN_USER} \
         -d ${PGBOUNCER_ADMIN_DB} \
         -c "RELOAD;"
-    
+
     resume_pool "$pool_name"
 }
 
@@ -89,7 +128,7 @@ check_ro_pool_status() {
 
 get_current_pool_host() {
     local pool_name=$1
-    PGPASSWORD=${PGBOUNCER_ADMIN_PASSWORD} psql -h localhost \
+    PGPASSWORD=${PGBOUNCER_ADMIN_PASSWORD} psql -h "$SOURCE_HOST" \
         -p ${PGBOUNCER_PORT} \
         -U ${PGBOUNCER_ADMIN_USER} \
         -d ${PGBOUNCER_ADMIN_DB} \

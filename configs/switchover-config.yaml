@@ -17,12 +17,16 @@ database:
   name: testdb
   user: testuser
   password: testpass
+  logical_slot: dms_slot
+  logical_publication: dms_pub
+  logical_subscription: dms_sub
 connectors:
   - name: postgres-connector
     slot_name: debezium
     publication_name: dbz_publication
 pgbouncer:
   config_file: pgbouncer.ini
+  switchover_config_file: pgbouncer_new.ini
   admin_port: 6433
   admin_user: testuser # PgBouncer admin user
   admin_password: testpass # PgBouncer admin password

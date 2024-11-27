@@ -58,6 +58,7 @@ perform_switchover() {
     
     local rw_pool_name=$(yq e '.pgbouncer.pools.read_write.name' "$CONFIG_FILE")
     pause_pool "$rw_pool_name"
+    wait_for_logical_replica_sync
     
     sync_sequences
     
@@ -84,18 +85,21 @@ swap_roles() {
     local orig_source_port="$SOURCE_PORT"
     local -a orig_source_replicas=("${SOURCE_REPLICAS[@]}")
     local orig_source_internal="$SOURCE_INTERNAL_NAME"
+    local orig_pgb_config="$PGBOUNCER_CONFIG"
     
     # Swap source to target
     SOURCE_HOST="$TARGET_HOST"
     SOURCE_PORT="$TARGET_PORT"
     SOURCE_REPLICAS=("${TARGET_REPLICAS[@]}")
     SOURCE_INTERNAL_NAME="$TARGET_INTERNAL_NAME"
+    PGBOUNCER_CONFIG="$PGBOUNCER_SWITCHOVER_CONFIG"
     
     # Swap target to original source
     TARGET_HOST="$orig_source_host"
     TARGET_PORT="$orig_source_port"
     TARGET_REPLICAS=("${orig_source_replicas[@]}")
     TARGET_INTERNAL_NAME="$orig_source_internal"
+    PGBOUNCER_SWITCHOVER_CONFIG="$orig_pgb_config"
     
     log_info "Roles swapped: new source=${SOURCE_HOST}, new target=${orig_source_host}"
 }

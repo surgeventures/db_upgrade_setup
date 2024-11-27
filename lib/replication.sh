@@ -68,26 +68,26 @@ switch_replication_direction() {
     
     # Drop subscription in target (old subscriber)
     PGPASSWORD=$DB_PASSWORD psql -h "$TARGET_HOST" -p "$TARGET_PORT" -U "$DB_USER" -d "$DB_NAME" -c \
-        "DROP SUBSCRIPTION IF EXISTS dms_sub;"
+        "DROP SUBSCRIPTION IF EXISTS $DB_LOGICAL_SUB;"
 
     PGPASSWORD=$DB_PASSWORD psql -h "$TARGET_HOST" -p "$TARGET_PORT" -U "$DB_USER" -d "$DB_NAME" -c \
-        "SELECT pg_create_logical_replication_slot('dms_slot', 'pgoutput');"
+        "SELECT pg_create_logical_replication_slot('$DB_LOGICAL_SLOT', 'pgoutput');"
     
     # Create publication in target (new publisher)
     PGPASSWORD=$DB_PASSWORD psql -h "$TARGET_HOST" -p "$TARGET_PORT" -U "$DB_USER" -d "$DB_NAME" -c "
-        DROP PUBLICATION IF EXISTS dms_pub;
-        CREATE PUBLICATION dms_pub FOR ALL TABLES;"
+        DROP PUBLICATION IF EXISTS $DB_LOGICAL_PUB;
+        CREATE PUBLICATION $DB_LOGICAL_PUB FOR ALL TABLES;"
     
     # Drop old publication in source
     PGPASSWORD=$DB_PASSWORD psql -h "$SOURCE_HOST" -p "$SOURCE_PORT" -U "$DB_USER" -d "$DB_NAME" -c "
-        DROP PUBLICATION IF EXISTS dms_pub;"
+        DROP PUBLICATION IF EXISTS $DB_LOGICAL_PUB;"
     
     # Create subscription in source (new subscriber)
     PGPASSWORD=$DB_PASSWORD psql -h "$SOURCE_HOST" -p "$SOURCE_PORT" -U "$DB_USER" -d "$DB_NAME" -c "
-        CREATE SUBSCRIPTION dms_sub 
+        CREATE SUBSCRIPTION $DB_LOGICAL_SUB 
         CONNECTION 'host=${TARGET_INTERNAL_NAME} port=5432 dbname=${DB_NAME} user=${DB_USER} password=${DB_PASSWORD}'
-        PUBLICATION dms_pub 
-        WITH (copy_data = false, create_slot = false, slot_name = 'dms_slot');"
+        PUBLICATION $DB_LOGICAL_PUB 
+        WITH (copy_data = false, create_slot = false, slot_name = '$DB_LOGICAL_SLOT');"
 }
 
 wait_for_slots_catchup() {
@@ -106,7 +106,7 @@ wait_for_slots_catchup() {
         sleep 5
         return 0
     fi
-    
+
     # Start checks in parallel
     for slot in "${slots_to_migrate[@]}"; do
         check_slot_lag "$slot" &
@@ -156,6 +156,32 @@ check_slot_lag() {
     return 1
 }
 
+wait_for_logical_replica_sync() {
+   log_info "Waiting for logical replica to catchup..."
+
+    local sent_lsn
+    sent_lsn=$(PGPASSWORD=$DB_PASSWORD psql -h "$SOURCE_HOST" -p "$SOURCE_PORT" -U "$DB_USER" -d "$DB_NAME" -Atc "
+        SELECT sent_lsn 
+        FROM pg_stat_replication 
+        WHERE application_name = '$DB_LOGICAL_SUB'")
+
+    # wait 5 secs at max for catchup
+    for ((i=0; i<5; i++)); do
+        local diff_bytes
+        diff_bytes=$(PGPASSWORD=$DB_PASSWORD psql -h "$TARGET_HOST" -p "$TARGET_PORT" -U "$DB_USER" -d "$DB_NAME" -Atc "
+            SELECT pg_wal_lsn_diff('$sent_lsn', received_lsn) 
+            FROM pg_stat_subscription 
+            WHERE subname = '$DB_LOGICAL_SUB'")
+
+        if [ "$diff_bytes" -le 0 ]; then
+            log_info "Logical replica caught up"
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
+}
+
 get_active_slots() {
     PGPASSWORD=$DB_PASSWORD psql -h "$SOURCE_HOST" -p "$SOURCE_PORT" -U "$DB_USER" -d "$DB_NAME" -tAc "
         SELECT slot_name, 
@@ -167,7 +193,25 @@ get_active_slots() {
 discover_replication_mappings() {
     local mappings=()
     local unmapped=()
-    
+
+    # Display logical replica for upgrade settings
+    echo -e "\nLogical Replication Configuration:"
+    printf "%-25s %-30s\n" "Setting" "Value"
+    echo "------------------------------------------------------------------------"
+    printf "%-25s %-30s\n" "Logical Slot" "$DB_LOGICAL_SLOT"
+    printf "%-25s %-30s\n" "Logical Subscription" "$DB_LOGICAL_SUB"
+    printf "%-25s %-30s\n" "Logical Publication" "$DB_LOGICAL_PUB"
+
+    echo -e "\nProceed with these settings? [y/N] "
+    read -r response
+
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+        echo "Proceeding with configuration..."
+    else
+        echo "Operation cancelled."
+        return 1
+    fi
+
     while IFS='|' read -r slot lag; do
         slot=$(echo "$slot" | xargs)
         lag=$(echo "$lag" | xargs)
